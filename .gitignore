@@ -6,3 +6,4 @@
 *.json
 __pycache__/
 /indexes/
+/.pytest_cache/
