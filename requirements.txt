@@ -1,0 +1,10 @@
+
+Flask>=2.2.0
+pytest
+matplotlib
+numpy
+requests
+wikipedia-api
+urllib3
+pymorphy2
+
