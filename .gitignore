@@ -1,0 +1,4 @@
+/myenv/
+*.txt
+*.tsv
+*.jsonl
