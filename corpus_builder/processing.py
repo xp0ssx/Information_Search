@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import json
 import os
+import re
+import unicodedata
 from pathlib import Path
 
 def main():
@@ -71,19 +73,59 @@ def main():
                     current_file.write("id\ttitle\ttext\n")
                 
                 # Текст
-                text = doc.get('text', '')
-                # Убираем табы и переносы, сокращаем множественные пробелы
-                text_clean = ' '.join(text.replace('\t', ' ')
-                                           .replace('\n', ' ')
-                                           .replace('\r', ' ')
-                                           .split())
+                def normalize_text(s: str) -> str:
+                    if s is None:
+                        return ''
+                    # Unicode normalization
+                    s = unicodedata.normalize('NFC', s)
+
+                    # Replace various no-break spaces and similar with normal space
+                    s = s.replace('\u00A0', ' ')  # NO-BREAK SPACE
+                    s = s.replace('\u202F', ' ')  # NARROW NO-BREAK SPACE
+                    s = s.replace('\uFEFF', '')   # ZERO WIDTH NO-BREAK SPACE (BOM)
+
+                    # Remove soft hyphen and zero-width chars
+                    s = s.replace('\u00AD', '')
+                    for ch in ('\u200B', '\u200C', '\u200D'):
+                        s = s.replace(ch, '')
+
+                    # Normalize various hyphen/dash characters to simple hyphen
+                    # en dash 	6, em dash 	7 etc. Cover common variants
+                    s = re.sub(r'[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]', '-', s)
+
+                    # Remove other control characters except line breaks (keep \n and \r for now)
+                    # Category Cc are control chars; preserve \n and \r
+                    s = ''.join(ch for ch in s if (unicodedata.category(ch) != 'Cc' or ch in '\n\r'))
+
+                    # Dehyphenation: join pieces split by hyphen at end of line
+                    # e.g. 'слово-\nчасть' or 'слово -\n часть' -> 'словочасть'
+                    s = re.sub(r'([A-Za-zА-Яа-яЁё0-9])\s*[-]\s*[\r\n]+\s*([A-Za-zА-Яа-яЁё0-9])', r'\1\2', s)
+
+                    # Replace tabs and remaining line breaks with a single space
+                    s = s.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+
+                    # Collapse multiple whitespace to single space and strip
+                    s = ' '.join(s.split())
+
+                    # Conservative intra-word glue: remove single spaces between long
+                    # letter/digit sequences only when both sides are reasonably long.
+                    # Use word characters (unicode) via \w with re.UNICODE.
+                    try:
+                        s = re.sub(r'(?<=\b\w{4})\s+(?=\w{3}\b)', '', s, flags=re.U)
+                    except re.error:
+                        # Fallback: if unicode flags not accepted, do simpler collapse
+                        s = re.sub(r'(?<=\w{4})\s+(?=\w{3})', '', s)
+
+                    return s
+
+                text = normalize_text(doc.get('text', '') or '')
+                title = normalize_text(doc.get('title', '') or '')
                 
-                text_bytes = len(text_clean.encode('utf-8'))
+                text_bytes = len(text.encode('utf-8'))
                 total_text_bytes += text_bytes
                 
                 # Запись — пропускаем повторы по id
                 doc_id = doc.get('id', '')
-                title = doc.get('title', '').replace('\t', ' ')
                 total_input_docs += 1
                 if not doc_id:
                     # Если нет id — просто пропускаем запись и логируем
@@ -93,9 +135,9 @@ def main():
                     # логируем файл/заголовок и пропускаем
                     dup_log.write(f"DUPLICATE\t{doc_id}\t{title}\n")
                     continue
-                # уникальный документ — записываем
+                # уникальный документ — записываем (title and text are already cleaned)
                 seen_ids.add(doc_id)
-                current_file.write(f"{doc_id}\t{title}\t{text_clean}\n")
+                current_file.write(f"{doc_id}\t{title}\t{text}\n")
                 written_docs += 1
                 
                 # Прогресс
