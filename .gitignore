@@ -1,9 +1,8 @@
 /myenv/
-*.txt
-*.tsv
-*.jsonl
-*.log
-*.json
+/corpus/
 __pycache__/
 /indexes/
 /.pytest_cache/
+/corpus_builder/wiki_cinema/
+/corpus_analyze/sample_tokenized.tsv
+/corpus_analyze/tokens_stats.json
