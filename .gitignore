@@ -3,3 +3,6 @@
 *.tsv
 *.jsonl
 *.log
+*.json
+__pycache__/
+/indexes/
